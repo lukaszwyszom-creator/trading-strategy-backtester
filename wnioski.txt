@@ -1,0 +1,120 @@
+Ten prompt jest lepszy od obecnego README pod katem logiki strategii, ale nadal ma kilka istotnych luk specyfikacyjnych. Da sie z niego zbudowac dzialajacy backtest, tylko bez doprecyzowania kilku punktow wynik moze byc arbitralny.
+
+Najwazniejsze wnioski
+1. Najwiekszy problem to niejednoznacznosc regul wyjscia.
+2. Drugi krytyczny problem to Ichimoku i ryzyko lookahead bias przez przesuniete chmury.
+3. Trzeci problem to ATR: wystepuje jako jeden z 7 wskaznikow, ale nie jest pelnoprawnym sygnalem w scoringu.
+4. Sam kierunek promptu jest dobry: jest bardziej tradingowy i mniej "przeoptymalizowany" niz poprzednia wersja.
+
+Najwazniejsze problemy
+1. TP1 = +10% i TP2 = +20% sa niejasne.
+- Nie wiadomo, czy to sa czesciowe realizacje zysku.
+- Nie wiadomo, czy zamykasz 50% pozycji na TP1 i reszte na TP2.
+- Nie wiadomo, czy TP1 anuluje TP2, czy tylko przesuwa stop.
+- To koliduje z prostym wyjsciem typu jeden entry_price, jeden exit_price, jeden exit_reason.
+
+2. Ichimoku moze latwo wprowadzic lookahead bias.
+- W promptcie jest zapis: Senkou A i Senkou B shifted forward.
+- To jest poprawne wizualnie na wykresie, ale niebezpieczne w backtescie.
+- Jesli porownasz dzisiejsza cene do chmury przesunietej w przod tak, jak jest rysowana, mozesz uzyc informacji z przyszlosci.
+- Trzeba jawnie zapisac, ze do decyzji uzywasz wartosci dostepnych na swiecy t, a forward shift sluzy tylko do prezentacji, nie do sygnalu.
+
+3. Brakuje formalnej definicji realizacji TP/SL na danych dziennych.
+- Prompt mowi: sygnaly na D1 i wejscie na nastepnym open.
+- Ale TP i SL dzieja sie intraday.
+- Przy danych OHLC nie wiadomo, co zrobic, gdy w tej samej swiecy zostaly trafione jednoczesnie TP i SL.
+- Trzeba ustalic konserwatywna regule, np. najpierw SL albo najpierw poziom blizszy cenie otwarcia.
+
+4. ATR jest w wymaganych 7 wskaznikach, ale nie jest czescia buy/sell score.
+- W scoringu sa:
+  - SMA
+  - Ichimoku
+  - RSI
+  - MACD
+  - Bollinger
+- ATR nie daje punktow buy/sell, tylko steruje SL i trailing stopem.
+- Jesli wymaganie brzmi EXACTLY these 7 indicators, to ATR powinien byc jawnie sklasyfikowany jako:
+  - wskaznik zarzadzania ryzykiem, nie sygnalowy
+  - albo dostac wlasny komponent scoringu
+
+5. Weekly trend confirmation jest opcjonalne, ale niesprecyzowane.
+- To za duza swoboda implementacyjna.
+- Nie wiadomo:
+  - czy weekly ma byc filtrem obowiazkowym
+  - czy tylko dodatnim punktem do score
+  - czy weekly trend ma byc liczony ze SMA, Ichimoku, czy obu
+  - jak wyrownac W1 do D1, np. forward-fill od zamkniecia tygodnia
+
+6. Kilka warunkow jest zbyt miekkich.
+- RSI > 70 and turning down
+- MACD histogram increasing
+- price pulls back
+- price is NOT near upper Bollinger band
+- price bouncing from Bollinger middle/lower
+- To wszystko trzeba zapisac matematycznie, np.:
+  - turning down = rsi[t] < rsi[t-1] and rsi[t-1] >= 70
+  - hist increasing = hist[t] > hist[t-1]
+  - not near upper band = close < bb_upper - 0.25 * (bb_upper - bb_mid)
+
+7. Wyjscie jest dosc ubogie jak na sensowny backtest.
+- Masz:
+  - trades DataFrame
+  - win rate
+  - average return
+  - total return
+  - max drawdown
+  - equity curve
+- Brakuje np.:
+  - number_of_trades
+  - profit_factor
+  - best/worst trade
+  - exposure
+  - buy-and-hold benchmark
+  - summary JSON/CSV
+- To nie blokuje implementacji, ale oslabi uzytecznosc wyniku.
+
+Mocne strony promptu
+1. Dobrze wymusza brak lookahead bias.
+2. Dobrze rozdziela:
+- trend
+- momentum
+- entry
+- exit
+- scoring
+3. Wejscie at next candle open jest duzo bardziej realistyczne niz wejscie na tej samej swiecy.
+4. Ograniczenie do jednego trade na raz upraszcza silnik.
+5. Rezygnacja z ciezkiej optymalizacji jako glownego celu to dobry kierunek.
+6. Prompt jest bardziej strategiczny i mniej task-listowy niz poprzedni README.
+
+Czy ten prompt jest lepszy od poprzedniego?
+Tak, jesli celem jest:
+- prostsza, bardziej spojna strategia
+- mniejsza liczba arbitralnych warunkow
+- latwiejszy do utrzymania backtest
+- mniejsze ryzyko bardzo dlugiego runtime
+
+Nie, jesli celem jest:
+- pelna formalna specyfikacja bez luk
+- od razu deterministyczna implementacja bez decyzji projektowych
+- szeroki zestaw metryk i raportow
+
+Co bym poprawil przed implementacja
+1. Zdecydowac, czy TP1/TP2 oznacza partial exits.
+2. Jawnie opisac, jak uzywac Ichimoku bez future leak.
+3. Doprecyzowac kolejnosc zdarzen intraday dla TP/SL na danych D1.
+4. Zdefiniowac weekly filter jako:
+- obowiazkowy albo wylaczony
+- nie opcjonalny "na slowo"
+5. Sformalizowac wszystkie miekkie warunki progami liczbowymi.
+6. Wyjasnic role ATR:
+- sygnalowy czy tylko risk management.
+7. Rozszerzyc output o kilka podstawowych metryk.
+
+Moja ocena
+- Kierunek: dobry
+- Jako prompt implementacyjny: srednio dobry
+- Jako prompt tradingowy: dobry
+- Jako specyfikacja produkcyjna: jeszcze nie dosc precyzyjny
+
+Najkrotszy werdykt
+To jest lepszy prompt strategiczny niz obecny README, ale przed kodowaniem wymaga doprecyzowania 5-7 krytycznych zasad, inaczej implementacja bedzie poprawna technicznie, ale czesciowo uznaniowa.
